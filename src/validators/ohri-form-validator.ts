@@ -6,6 +6,17 @@ export const fieldOutOfBoundErrCode = 'field.outOfBound';
 
 export const OHRIFieldValidator: FieldValidator = {
   validate: (field: OHRIFormField, value: any) => {
+    if (!field || !value) {
+      throw new Error('IllegalArgumentException: field cannot be null');
+    }
+    if (field.questionOptions.rendering === 'text' && typeof value !== 'string') {
+      throw new Error('IllegalTypeException: value should be a string');
+    }
+
+    if (field.questionOptions.rendering === 'number' && typeof value !== 'number') {
+      throw new Error('IllegalTypeException: value should be a number');
+    }
+
     if (field['submission']?.unspecified) {
       return [];
     }

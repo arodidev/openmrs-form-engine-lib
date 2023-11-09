@@ -1,7 +1,35 @@
-import { OHRIFormField } from '../api/types';
+import { OHRIFormField, RenderType } from '../api/types';
 import { OHRIFieldValidator } from './ohri-form-validator';
 
 describe('OHRIFieldValidator - validate', () => {
+  const defaultInputField: OHRIFormField = {
+    label: 'A Question of type obs that can take any rendering type',
+    type: 'obs',
+    questionOptions: {
+      rendering:
+        'checkbox' ||
+        'content-switcher' ||
+        'date' ||
+        'datetime' ||
+        'encounter-location' ||
+        'file' ||
+        'fixed-value' ||
+        'group' ||
+        'number' ||
+        'radio' ||
+        'repeating' ||
+        'select' ||
+        'text' ||
+        'textarea' ||
+        'toggle' ||
+        'ui-select-extended',
+      concept: 'a-system-defined-concept-uuid',
+      min: '5',
+      max: '10',
+    },
+    id: 'sampleNumberQuestion',
+  };
+
   const numberInputField: OHRIFormField = {
     label: 'A Question of type obs that renders a Number input',
     type: 'obs',
@@ -141,6 +169,28 @@ describe('OHRIFieldValidator - validate', () => {
         resultType: 'error',
       },
     ]);
+  });
+
+  it('should fail when a field recieves an empty value', () => {
+    expect(() => OHRIFieldValidator.validate(defaultInputField, null)).toThrow(
+      'IllegalArgumentException: field cannot be null',
+    );
+  });
+
+  it('should fail for if a number field recieves a non-number value', () => {
+    expect(() => OHRIFieldValidator.validate(numberInputField, 'sampleString')).toThrow(
+      'IllegalTypeException: value should be a number',
+    );
+  });
+
+  it('should throw null exception when field is null', () => {
+    expect(() => OHRIFieldValidator.validate(null, null)).toThrow('IllegalArgumentException: field cannot be null');
+  });
+
+  it('should fail if a text input field recieves a non string value', () => {
+    expect(() => OHRIFieldValidator.validate(textInputField, 42)).toThrow(
+      'IllegalTypeException: value should be a string',
+    );
   });
 
   it('should fail for numbers greater than the defined max allowed', () => {
