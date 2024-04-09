@@ -29,6 +29,7 @@ import OHRIFormSidebar from './components/sidebar/ohri-form-sidebar.component';
 import WarningModal from './components/warning-modal.component';
 import styles from './ohri-form.component.scss';
 import { evaluatePostSubmissionExpression } from './utils/post-submission-action-helper';
+import useSchemaValidator from './hooks/useSchemaValidator';
 
 interface OHRIFormProps {
   patientUUID: string;
@@ -128,6 +129,8 @@ const OHRIForm: React.FC<OHRIFormProps> = ({
   const showButtonSet = useMemo(() => {
     return workspaceLayout === 'minimized' && sessionMode != 'embedded-view';
   }, [sessionMode, workspaceLayout]);
+
+  const { data } = useSchemaValidator(refinedFormJson);
 
   useEffect(() => {
     const extDetails = {
