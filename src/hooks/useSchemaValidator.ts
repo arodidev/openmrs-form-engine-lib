@@ -5,6 +5,11 @@ import { ConceptTrue, ConceptFalse } from '../constants';
 import { OHRIFormField, OHRIFormSchema } from '../api/types';
 import { useConcepts } from './useConcepts';
 
+type nullSearchReferenceErrorType = {
+  errorMessage: string;
+  field: OHRIFormField;
+};
+
 export default function useSchemaValidator(schema: OHRIFormSchema) {
   const [errors, setErrors] = useState([]);
   const [warnings, setWarnings] = useState([]);
@@ -18,14 +23,16 @@ export default function useSchemaValidator(schema: OHRIFormSchema) {
   });
 
   useMemo(() => {
-    let questionSearchReferences = [];
-    let nullSearchReferenceErrors = [];
-    let fields = [];
+    let questionSearchReferences: string[] = [];
+    let nullSearchReferenceErrors: nullSearchReferenceErrorType[] = [];
+    let fields: OHRIFormField[] = [];
 
     if (schema) {
       schema.pages?.forEach((page) =>
         page.sections?.forEach((section) =>
           section.questions?.forEach((question) => {
+            //this flattens the form and pulls out the search references for each field
+            //if the field is an obsGroup, it is flattened and search references are extracted within each of it's fields
             if (question.type === 'obsGroup') {
               question.questions.forEach((obsGrpQuestion) => {
                 fields.push(obsGrpQuestion);
@@ -144,7 +151,7 @@ export default function useSchemaValidator(schema: OHRIFormSchema) {
       });
   };
 
-  function extractQuestionSearchReferenceFromField(formField) {
+  function extractQuestionSearchReferenceFromField(formField: OHRIFormField): string {
     // setQuestionFields((prevArray) => [...prevArray, formField]);
     const searchRef = formField.questionOptions.concept
       ? formField.questionOptions.concept

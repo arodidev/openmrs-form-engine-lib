@@ -182,6 +182,7 @@ export interface OHRIFormQuestionOptions {
   allowMultiple?: boolean;
   datasource?: { name: string; config?: Record<string, any> };
   isSearchable?: boolean;
+  conceptMappings?: Array<Record<string, string>>;
 }
 
 export type SessionMode = 'edit' | 'enter' | 'view' | 'embedded-view';
