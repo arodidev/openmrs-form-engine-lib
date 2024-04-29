@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import classNames from 'classnames';
-import { FormGroup, ContentSwitcher as Switcher, Switch } from '@carbon/react';
+import { FormGroup, ContentSwitcher as CdsContentSwitcher, Switch } from '@carbon/react';
 import { useField } from 'formik';
 import { isInlineView } from '../../../utils/form-helper';
 import { isEmpty } from '../../../validators/form-validator';
 import { isTrue } from '../../../utils/boolean-utils';
-import { FieldValueView } from '../../value/view/field-value-view.component';
 import { FormContext } from '../../../form-context';
-import { FormFieldProps } from '../../../types';
+import { type FormFieldProps } from '../../../types';
+import FieldValueView from '../../value/view/field-value-view.component';
 import styles from './content-switcher.scss';
-import { useTranslation } from 'react-i18next';
 
-export const ContentSwitcher: React.FC<FormFieldProps> = ({ question, onChange, handler, previousValue }) => {
+const ContentSwitcher: React.FC<FormFieldProps> = ({ question, onChange, handler, previousValue }) => {
   const { t } = useTranslation();
   const [field, meta] = useField(question.id);
   const { setFieldValue, encounterContext, layoutType, workspaceLayout } = React.useContext(FormContext);
@@ -69,7 +69,11 @@ export const ContentSwitcher: React.FC<FormFieldProps> = ({ question, onChange, 
           [styles.errorLegend]: errors.length > 0,
           [styles.boldedLegend]: errors.length === 0,
         })}>
-        <Switcher onChange={handleChange} selectedIndex={selectedIndex} className={styles.selectedOption} size="md">
+        <CdsContentSwitcher
+          onChange={handleChange}
+          selectedIndex={selectedIndex}
+          className={styles.selectedOption}
+          size="md">
           {question.questionOptions.answers.map((option, index) => (
             <Switch
               name={option.concept || option.value}
@@ -78,8 +82,10 @@ export const ContentSwitcher: React.FC<FormFieldProps> = ({ question, onChange, 
               disabled={question.disabled}
             />
           ))}
-        </Switcher>
+        </CdsContentSwitcher>
       </FormGroup>
     )
   );
 };
+
+export default ContentSwitcher;

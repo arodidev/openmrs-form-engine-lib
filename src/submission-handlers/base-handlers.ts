@@ -1,8 +1,8 @@
 import dayjs from 'dayjs';
 import { getConcept, getAttachmentByUuid } from '../api/api';
 import { ConceptTrue } from '../constants';
-import { EncounterContext } from '../form-context';
-import { FormField, OpenmrsEncounter, OpenmrsObs, SubmissionHandler } from '../types';
+import { type EncounterContext } from '../form-context';
+import { type FormField, type OpenmrsEncounter, type OpenmrsObs, type SubmissionHandler } from '../types';
 import { parseToLocalDateTime } from '../utils/form-helper';
 import { flattenObsList, hasRendering } from '../utils/common-utils';
 
@@ -155,13 +155,13 @@ export const EncounterLocationSubmissionHandler: SubmissionHandler = {
   handleFieldSubmission: (field: FormField, value: any, context: EncounterContext) => {
     return null;
   },
-  getInitialValue: (encounter: any, field: FormField) => {
+  getInitialValue: (encounter: { location: { name: string; uuid: string } }, field: FormField) => {
     return {
       display: encounter.location.name,
       uuid: encounter.location.uuid,
     };
   },
-  getDisplayValue: (field: FormField, value) => {
+  getDisplayValue: (field: FormField, value: { display: string }) => {
     return value.display;
   },
 };

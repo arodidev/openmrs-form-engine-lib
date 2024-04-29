@@ -5,9 +5,10 @@ import { useField } from 'formik';
 import { isTrue } from '../../../utils/boolean-utils';
 import { fieldRequiredErrCode, isEmpty } from '../../../validators/form-validator';
 import { isInlineView } from '../../../utils/form-helper';
-import { FieldValueView } from '../../value/view/field-value-view.component';
-import { FormFieldProps } from '../../../types';
+import FieldValueView from '../../value/view/field-value-view.component';
+import { type FormFieldProps } from '../../../types';
 import { FormContext } from '../../../form-context';
+import RequiredFieldLabel from '../../required-field-label/required-field-label.component';
 import styles from './number.scss';
 import { useTranslation } from 'react-i18next';
 
@@ -71,9 +72,9 @@ const NumberField: React.FC<FormFieldProps> = ({ question, onChange, handler, pr
       <NumberInput
         {...field}
         id={question.id}
-        invalid={isFieldRequiredError && errors.length > 0}
+        invalid={errors.length > 0}
         invalidText={errors[0]?.message}
-        label={t(question.label)}
+        label={question.required ? <RequiredFieldLabel label={t(question.label)} /> : <span>{t(question.label)}</span>}
         max={Number(question.questionOptions.max) || undefined}
         min={Number(question.questionOptions.min) || undefined}
         name={question.id}

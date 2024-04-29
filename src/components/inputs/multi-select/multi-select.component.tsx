@@ -3,16 +3,17 @@ import { FilterableMultiSelect, Layer, Tag } from '@carbon/react';
 import classNames from 'classnames';
 import { useField } from 'formik';
 import { useTranslation } from 'react-i18next';
-import { FieldValueView } from '../../value/view/field-value-view.component';
 import { FormContext } from '../../../form-context';
-import { FormFieldProps } from '../../../types';
+import { type FormFieldProps } from '../../../types';
 import { ValueEmpty } from '../../value/value.component';
 import { fieldRequiredErrCode, isEmpty } from '../../../validators/form-validator';
 import { isInlineView } from '../../../utils/form-helper';
 import { isTrue } from '../../../utils/boolean-utils';
+import FieldValueView from '../../value/view/field-value-view.component';
+import RequiredFieldLabel from '../../required-field-label/required-field-label.component';
 import styles from './multi-select.scss';
 
-export const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, handler, previousValue }) => {
+const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, handler, previousValue }) => {
   const { t } = useTranslation();
   const [field, meta] = useField(question.id);
   const { setFieldValue, encounterContext, layoutType, workspaceLayout } = React.useContext(FormContext);
@@ -41,12 +42,15 @@ export const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, hand
     }
   }, [question['submission']]);
 
-  const initiallySelectedQuestionItems = [];
-  question.questionOptions.answers.forEach((item) => {
-    if (field.value?.includes(item.concept)) {
-      initiallySelectedQuestionItems.push(item);
-    }
-  });
+  const initiallySelectedQuestionItems = useMemo(() => {
+    const selectedItems = [];
+    question.questionOptions.answers.forEach((item) => {
+      if (field.value?.includes(item.concept)) {
+        selectedItems.push(item);
+      }
+    });
+    return selectedItems;
+  }, [question, field.value]);
 
   const handleSelectItemsChange = ({ selectedItems }) => {
     setTouched(true);
@@ -103,11 +107,13 @@ export const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, hand
                 }))}
               initialSelectedItems={initiallySelectedQuestionItems}
               label={''}
-              titleText={t(question.label)}
+              titleText={
+                question.required ? <RequiredFieldLabel label={t(question.label)} /> : <span>{t(question.label)}</span>
+              }
               key={counter}
               itemToString={(item) => (item ? item.label : ' ')}
               disabled={question.disabled}
-              invalid={isFieldRequiredError && errors.length > 0}
+              invalid={errors.length > 0}
               invalidText={errors[0]?.message}
               warn={warnings.length > 0}
               warnText={warnings[0]?.message}
@@ -132,3 +138,5 @@ export const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, hand
     )
   );
 };
+
+export default MultiSelect;

@@ -3,21 +3,22 @@ import classNames from 'classnames';
 import debounce from 'lodash-es/debounce';
 import { ComboBox, InlineLoading, Layer } from '@carbon/react';
 import { useField } from 'formik';
-import { FieldValueView } from '../../value/view/field-value-view.component';
 import { isTrue } from '../../../utils/boolean-utils';
 import { useTranslation } from 'react-i18next';
 import { getRegisteredDataSource } from '../../../registry/registry';
 import { getControlTemplate } from '../../../registry/inbuilt-components/control-templates';
 import { FormContext } from '../../../form-context';
-import { FormFieldProps } from '../../../types';
+import { type FormFieldProps } from '../../../types';
 import { fieldRequiredErrCode, isEmpty } from '../../../validators/form-validator';
+import FieldValueView from '../../value/view/field-value-view.component';
 import { isInlineView } from '../../../utils/form-helper';
+import RequiredFieldLabel from '../../required-field-label/required-field-label.component';
 import styles from './ui-select-extended.scss';
 
-const UISelectExtended: React.FC<FormFieldProps> = ({ question, handler, onChange, previousValue }) => {
+const UiSelectExtended: React.FC<FormFieldProps> = ({ question, handler, onChange, previousValue }) => {
   const { t } = useTranslation();
   const [field, meta] = useField(question.id);
-  const { setFieldValue, encounterContext, layoutType, workspaceLayout, fields } = React.useContext(FormContext);
+  const { setFieldValue, encounterContext, layoutType, workspaceLayout } = React.useContext(FormContext);
   const [items, setItems] = useState([]);
   const [warnings, setWarnings] = useState([]);
   const [errors, setErrors] = useState([]);
@@ -139,7 +140,9 @@ const UISelectExtended: React.FC<FormFieldProps> = ({ question, handler, onChang
           <Layer>
             <ComboBox
               id={question.id}
-              titleText={t(question.label)}
+              titleText={
+                question.required ? <RequiredFieldLabel label={t(question.label)} /> : <span>{t(question.label)}</span>
+              }
               items={items}
               itemToString={(item) => item?.display}
               selectedItem={items.find((item) => item.uuid == field.value)}
@@ -156,6 +159,8 @@ const UISelectExtended: React.FC<FormFieldProps> = ({ question, handler, onChang
               }}
               disabled={question.disabled}
               readOnly={question.readonly}
+              invalid={errors.length > 0}
+              invalidText={errors.length && errors[0].message}
               onInputChange={(value) => {
                 if (isProcessingSelection.current) {
                   // Notes:
@@ -178,4 +183,4 @@ const UISelectExtended: React.FC<FormFieldProps> = ({ question, handler, onChang
   );
 };
 
-export default UISelectExtended;
+export default UiSelectExtended;

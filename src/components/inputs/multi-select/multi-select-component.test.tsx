@@ -5,7 +5,7 @@ import { mockVisit } from '../../../../__mocks__/visit.mock';
 import multiSelectFormSchema from '../../../../__mocks__/forms/rfe-forms/multi-select-form.json';
 import { mockPatient } from '../../../../__mocks__/patient.mock';
 import { mockSessionDataResponse } from '../../../../__mocks__/session.mock';
-import { FormSchema } from '../../../types';
+import { type FormSchema } from '../../../types';
 import FormEngine from '../../../form-engine.component';
 
 const mockOpenmrsFetch = jest.fn();
@@ -79,7 +79,7 @@ describe('OHRIMultiSelect Component', () => {
     const user = userEvent.setup();
     await renderForm();
 
-    await user.click(screen.getByRole('combobox', { name: /Patient covered by NHIF/i }));
+    await user.click(screen.getByRole('combobox', { name: /patient covered by nhif/i }));
     await user.click(screen.getByRole('option', { name: /yes/i }));
 
     await user.click(screen.getByText('Was this visit scheduled?'));
