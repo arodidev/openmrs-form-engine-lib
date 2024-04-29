@@ -35,7 +35,7 @@ export function evaluateExpression(
   let { myValue, patient } = context;
   const { sex, age } = patient && 'sex' in patient && 'age' in patient ? patient : { sex: undefined, age: undefined };
 
-  if (node.type === 'field' && myValue === undefined && node.value) {
+  if (node.type === 'field' && myValue === undefined) {
     myValue = fieldValues[node.value['id']];
   }
 
@@ -86,7 +86,6 @@ export async function evaluateAsyncExpression(
 
   // register dependencies
   findAndRegisterReferencedFields(node, parts, fields);
-  //adds values to the determinants
 
   // setup function scope
   let { myValue, patient } = context;
