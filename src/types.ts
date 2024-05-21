@@ -1,5 +1,6 @@
 import { type OpenmrsResource } from '@openmrs/esm-framework';
 import { type FieldHelperProps, type FieldInputProps, type FieldMetaProps } from 'formik';
+import { type Dispatch, type SetStateAction } from 'react';
 import { type EncounterContext } from './form-context';
 
 /**
@@ -77,7 +78,7 @@ export interface FormSchema {
   readonly?: string | boolean;
   inlineRendering?: 'single-line' | 'multiline' | 'automatic';
   markdown?: any;
-  postSubmissionActions?: Array<{ actionId: string; enabled?: string, config?: Record<string, any> }>;
+  postSubmissionActions?: Array<{ actionId: string; enabled?: string; config?: Record<string, any> }>;
   formOptions?: {
     usePreviousValueDisabled: boolean;
   };
@@ -85,7 +86,7 @@ export interface FormSchema {
   translations?: Record<string, string>;
   meta?: {
     programs?: Record<string, any>;
-  }
+  };
 }
 
 export interface FormPage {
@@ -157,6 +158,8 @@ export interface FormFieldProps {
   // This is of util to components defined out of the engine
   useField?: (fieldId: string) => [FieldInputProps<any>, FieldMetaProps<any>, FieldHelperProps<any>];
   previousValue?: previousValue;
+  dataSourceReference?: dataSourceValue;
+  setDataSourceReference?: Dispatch<SetStateAction<{}>>;
 }
 
 export interface FormSection {
@@ -242,6 +245,7 @@ export interface FormQuestionOptions {
   orderSettingUuid?: string;
   orderType?: string;
   selectableOrders?: Array<Record<any, any>>;
+  config?: Record<'referencedField', string>;
 }
 
 export type SessionMode = 'edit' | 'enter' | 'view' | 'embedded-view';
@@ -253,6 +257,7 @@ export type RenderType =
   | 'datetime'
   | 'encounter-location'
   | 'encounter-provider'
+  | 'encounter-role'
   | 'fixed-value'
   | 'file'
   | 'group'
@@ -429,4 +434,11 @@ export interface Order {
   patient?: string;
   orderNumber?: string;
   voided?: boolean;
+}
+
+export interface dataSourceReferenceType {
+  [fieldId: string]: dataSourceValue;
+}
+interface dataSourceValue {
+  value: string;
 }
