@@ -278,6 +278,20 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
             );
           }
 
+          const referencedFieldValue = field.questionOptions.config?.referencedFieldExpression;
+          if (field.questionOptions.rendering === 'select-concept-answers' && !isEmpty(referencedFieldValue)) {
+            field.questionOptions.config.referencedFieldEvaluatedValue = evaluateExpression(
+              referencedFieldValue,
+              { value: field, type: 'field' },
+              flattenedFields,
+              tempInitialValues,
+              {
+                mode: sessionMode,
+                patient,
+              },
+            );
+          }
+
           // for each question and answer, see if we find a matching concept, and, if so:
           //   1) replace the concept reference with uuid (for the case when the form references the concept by mapping)
           //   2) use the concept display as the label if no label specified
@@ -606,6 +620,36 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
               },
             );
           });
+
+        if (
+          dependant.questionOptions.rendering === 'select-concept-answers' &&
+          dependant.questionOptions.config?.referencedFieldExpression
+        ) {
+          dependant.questionOptions.config.referencedFieldEvaluatedValue = evaluateExpression(
+            dependant.questionOptions.config.referencedFieldExpression,
+            { value: field, type: 'field' },
+            flattenedFields,
+            tempInitialValues,
+            {
+              mode: sessionMode,
+              patient,
+            },
+          );
+          ({
+            referencedFieldEvaluatedValue: evaluateExpression(
+              dependant.questionOptions.config.referencedFieldExpression,
+              { value: field, type: 'field' },
+              flattenedFields,
+              tempInitialValues,
+              {
+                mode: sessionMode,
+                patient,
+              },
+            ),
+          });
+
+          console.log('my referenced field changed', dependant);
+        }
 
         // evaluate readonly
         if (!dependant.isHidden && dependant['readonlyExpression']) {

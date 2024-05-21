@@ -239,6 +239,7 @@ export interface FormQuestionOptions {
   orderSettingUuid?: string;
   orderType?: string;
   selectableOrders?: Array<Record<any, any>>;
+  config?: Record<string, string>;
 }
 
 export type SessionMode = 'edit' | 'enter' | 'view' | 'embedded-view';
