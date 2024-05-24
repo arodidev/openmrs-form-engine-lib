@@ -7,6 +7,9 @@ import { ControlHandler } from '../../submission-handlers/controlHandler';
 import { type RegistryItem } from '../registry';
 import { TestOrderSubmissionHandler } from '../../submission-handlers/testOrderHandler';
 import { ObsSubmissionHandler } from '../../submission-handlers/obsHandler';
+import { EncounterRoleHandler } from '../../submission-handlers/encounterRoleHandler';
+import { ProgramStateHandler } from '../../submission-handlers/programStateHandler';
+import { InlineDateHandler } from '../../submission-handlers/inlineDateHandler';
 
 /**
  * @internal
@@ -43,6 +46,11 @@ export const inbuiltFieldSubmissionHandlers: Array<RegistryItem<SubmissionHandle
     type: 'patientIdentifier',
   },
   {
+    name: 'InlineDateHandler',
+    component: InlineDateHandler,
+    type: 'inlineDate',
+  },
+  {
     name: 'controlHandler',
     component: ControlHandler,
     type: 'control',
@@ -51,5 +59,15 @@ export const inbuiltFieldSubmissionHandlers: Array<RegistryItem<SubmissionHandle
     name: 'TestOrderSubmissionHandler',
     component: TestOrderSubmissionHandler,
     type: 'testOrder',
+  },
+  {
+    name: 'EncounterRoleHandler',
+    component: EncounterRoleHandler,
+    type: 'encounterRole',
+  },
+  {
+    name: 'ProgramStateHandler',
+    component: ProgramStateHandler,
+    type: 'programState',
   },
 ];

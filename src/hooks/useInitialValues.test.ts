@@ -159,6 +159,7 @@ describe('useInitialValues', () => {
         useInitialValues(
           [...allFormFields],
           null,
+          false,
           {
             encounter: null,
             patient: testPatient,
@@ -169,6 +170,8 @@ describe('useInitialValues', () => {
             encounterProvider: '2c95f6f5-788e-4e73-9079-5626911231fa',
             setEncounterProvider: jest.fn,
             setEncounterLocation: jest.fn,
+            encounterRole: '',
+            setEncounterRole: jest.fn
           },
           formFieldHandlers,
         ),
@@ -195,6 +198,7 @@ describe('useInitialValues', () => {
         useInitialValues(
           [...allFormFields],
           encounter,
+          false,
           {
             encounter: encounter,
             patient: testPatient,
@@ -205,6 +209,8 @@ describe('useInitialValues', () => {
             encounterProvider: '2c95f6f5-788e-4e73-9079-5626911231fa',
             setEncounterProvider: jest.fn,
             setEncounterLocation: jest.fn,
+            encounterRole: '',
+            setEncounterRole: jest.fn
           },
           formFieldHandlers,
         ),
@@ -255,6 +261,7 @@ describe('useInitialValues', () => {
         useInitialValues(
           [...allFormFields],
           null,
+          false,
           {
             encounter: undefined,
             patient: testPatient,
@@ -265,6 +272,8 @@ describe('useInitialValues', () => {
             encounterProvider: '2c95f6f5-788e-4e73-9079-5626911231fa',
             setEncounterProvider: jest.fn,
             setEncounterLocation: jest.fn,
+            encounterRole: '',
+            setEncounterRole: jest.fn
           },
           formFieldHandlers,
         ),
@@ -293,6 +302,7 @@ describe('useInitialValues', () => {
         useInitialValues(
           [testOrder],
           encounter,
+          false,
           {
             encounter: encounter,
             patient: testPatient,
@@ -303,6 +313,8 @@ describe('useInitialValues', () => {
             encounterProvider: '2c95f6f5-788e-4e73-9079-5626911231fa',
             setEncounterProvider: jest.fn,
             setEncounterLocation: jest.fn,
+            encounterRole: '8cb3a399-d18b-4b62-aefb-5a0f948a3809',
+            setEncounterRole: jest.fn
           },
           formFieldHandlers,
         ),

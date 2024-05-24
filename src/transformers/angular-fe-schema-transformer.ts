@@ -1,11 +1,13 @@
 import { type FormField, type FormSchemaTransformer, type FormSchema } from '../types';
+import { isTrue } from '../utils/boolean-utils';
 
 export const AngularFormEngineSchemaTransformer: FormSchemaTransformer = {
   transform: (form: FormSchema) => {
     form.pages.forEach((page) => {
       if (page.sections) {
         page.sections.forEach((section) => {
-          section?.questions?.forEach((question, index) => handleQuestion(question, index));
+          section.questions = handleQuestionsWithDateOptions(section.questions);
+          section?.questions?.forEach((question, index) => handleQuestion(question, form));
         });
       }
     });
@@ -16,16 +18,53 @@ export const AngularFormEngineSchemaTransformer: FormSchemaTransformer = {
   },
 };
 
-function handleQuestion(question: FormField, index) {
+function handleQuestion(question: FormField, form: FormSchema) {
+  if (question.type === 'programState') {
+    const formMeta = form.meta ?? {};
+    formMeta.programs = formMeta.programs
+      ? { ...formMeta.programs, hasProgramFields: true }
+      : { hasProgramFields: true };
+    form.meta = formMeta;
+  }
   try {
     transformByType(question);
     transformByRendering(question);
     if (question?.questions?.length) {
-      question.questions.forEach((question) => handleQuestion(question, index));
+      question.questions.forEach((question) => handleQuestion(question, form));
     }
   } catch (error) {
     console.error(error);
   }
+}
+
+function handleQuestionsWithDateOptions(sectionQuestions: Array<FormField>): Array<FormField> {
+  const augmentedQuestions: Array<FormField> = [];
+
+  sectionQuestions?.forEach((question) => {
+    augmentedQuestions.push(question);
+    if (question.type !== 'inlineDate' && isTrue(question.questionOptions?.showDate)) {
+      const inlinedDate: FormField = {
+        id: `${question.id}_inline_date`,
+        label: `Date for ${question.label}`,
+        type: 'inlineDate',
+        questionOptions: {
+          rendering: 'date',
+          isTransient: true,
+        },
+        validators: question.questionOptions.shownDateOptions?.validators,
+        disabled: { disableWhenExpression: `isEmpty(${question.id})` },
+        hide: question.questionOptions.shownDateOptions?.hide || question.hide,
+        meta: {
+          targetField: question.id,
+          previousValue: question.meta?.previousValue?.obsDatetime,
+        },
+      };
+
+      augmentedQuestions.push(inlinedDate);
+    }
+  });
+
+  return augmentedQuestions;
 }
 
 function transformByType(question: FormField) {
@@ -35,6 +74,9 @@ function transformByType(question: FormField) {
       break;
     case 'encounterLocation':
       question.questionOptions.rendering = 'encounter-location';
+      break;
+    case 'encounterRole':
+      question.questionOptions.rendering = 'encounter-role';
       break;
   }
 }

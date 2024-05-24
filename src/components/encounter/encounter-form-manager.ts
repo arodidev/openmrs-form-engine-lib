@@ -1,9 +1,17 @@
 import { type OpenmrsResource } from '@openmrs/esm-framework';
-import { type FormField, type OpenmrsEncounter, type OpenmrsObs, type PatientIdentifier } from '../../types';
+import {
+  type PatientProgram,
+  type FormField,
+  type OpenmrsEncounter,
+  type OpenmrsObs,
+  type PatientIdentifier,
+  type PatientProgramPayload,
+} from '../../types';
 import { type EncounterContext } from '../../form-context';
-import { saveAttachment, saveEncounter, savePatientIdentifier } from '../../api/api';
+import { saveAttachment, saveEncounter, savePatientIdentifier, saveProgramEnrollment } from '../../api/api';
 import { hasRendering, hasSubmission } from '../../utils/common-utils';
 import { voidObs, constructObs } from '../../submission-handlers/obsHandler';
+import dayjs from 'dayjs';
 
 export class EncounterFormManager {
   static preparePatientIdentifiers(fields: FormField[], encounterLocation: string): PatientIdentifier[] {
@@ -15,12 +23,11 @@ export class EncounterFormManager {
   static prepareEncounter(
     allFields: FormField[],
     encounterContext: EncounterContext,
-    encounterRole: OpenmrsResource,
     visit: OpenmrsResource,
     encounterType: string,
     formUuid: string,
   ) {
-    const { patient, encounter, encounterDate, encounterProvider, location } = encounterContext;
+    const { patient, encounter, encounterDate, encounterRole, encounterProvider, location } = encounterContext;
     const obsForSubmission = [];
     prepareObs(obsForSubmission, allFields);
     const ordersForSubmission = prepareOrders(allFields);
@@ -39,7 +46,7 @@ export class EncounterFormManager {
           ...encounterForSubmission.encounterProviders,
           {
             provider: encounterProvider,
-            encounterRole: encounterRole?.uuid,
+            encounterRole,
           },
         ];
         encounterForSubmission.form = {
@@ -60,7 +67,7 @@ export class EncounterFormManager {
         encounterProviders: [
           {
             provider: encounterProvider,
-            encounterRole: encounterRole?.uuid,
+            encounterRole,
           },
         ],
         obs: obsForSubmission,
@@ -101,6 +108,35 @@ export class EncounterFormManager {
       return savePatientIdentifier(patientIdentifier, patient.id);
     });
   }
+
+  static preparePatientPrograms(
+    fields: FormField[],
+    patient: fhir.Patient,
+    currentPatientPrograms: Array<PatientProgram>,
+  ): Array<PatientProgramPayload> {
+    const programFields = fields.filter((field) => field.type === 'programState' && hasSubmission(field));
+    return programFields.map((field) => {
+      const programUuid = field.questionOptions.programUuid;
+      const existingProgramEnrollment = currentPatientPrograms.find((program) => program.program.uuid === programUuid);
+      if (existingProgramEnrollment) {
+        return {
+          uuid: existingProgramEnrollment.uuid,
+          states: [field.meta.submission.newValue],
+        };
+      }
+      return {
+        patient: patient.id,
+        program: programUuid,
+        states: [field.meta.submission.newValue],
+        dateEnrolled: dayjs().format(),
+      };
+    });
+  }
+
+  static savePatientPrograms = (patientPrograms: PatientProgramPayload[]) => {
+    const ac = new AbortController();
+    return Promise.all(patientPrograms.map((programPayload) => saveProgramEnrollment(programPayload, ac)));
+  };
 }
 
 // Helpers

@@ -13,9 +13,10 @@ import type {
 import FormPage from '../page/form-page.component';
 import { FormContext } from '../../form-context';
 import {
-  cascadeVisibityToChildFields,
   evalConditionalRequired,
+  evaluateDisabled,
   evaluateFieldReadonlyProp,
+  evaluateHide,
   findConceptByReference,
   findPagesWithErrors,
 } from '../../utils/form-helper';
@@ -28,20 +29,20 @@ import { FieldValidator, isEmpty } from '../../validators/form-validator';
 import { scrollIntoView } from '../../utils/scroll-into-view';
 import { useEncounter } from '../../hooks/useEncounter';
 import { useInitialValues } from '../../hooks/useInitialValues';
-import { useEncounterRole } from '../../hooks/useEncounterRole';
 import { useConcepts } from '../../hooks/useConcepts';
 import { useFormFieldHandlers } from '../../hooks/useFormFieldHandlers';
 import { useFormFieldValidators } from '../../hooks/useFormFieldValidators';
 import { useTranslation } from 'react-i18next';
 import { EncounterFormManager } from './encounter-form-manager';
 import { extractErrorMessagesFromResponse } from '../../utils/error-utils';
-import { findAndRegisterReferencedFields, linkReferencedFieldValues } from '../../utils/expression-parser';
+import { usePatientPrograms } from '../../hooks/usePatientPrograms';
 
 interface EncounterFormProps {
   formJson: FormSchema;
   patient: any;
   formSessionDate: Date;
   provider: string;
+  role: string;
   location: SessionLocation;
   visit?: Visit;
   values: Record<string, any>;
@@ -66,6 +67,7 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
   patient,
   formSessionDate,
   provider,
+  role,
   location,
   visit,
   values,
@@ -82,13 +84,13 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
   allInitialValues,
   setAllInitialValues,
   isSubmitting,
-  setIsSubmitting,
 }) => {
   const { t } = useTranslation();
   const [fields, setFields] = useState<Array<FormField>>([]);
   const [encounterLocation, setEncounterLocation] = useState(null);
   const [encounterDate, setEncounterDate] = useState(formSessionDate);
   const [encounterProvider, setEncounterProvider] = useState(provider);
+  const [encounterRole, setEncounterRole] = useState(role);
   const { encounter, isLoading: isLoadingEncounter } = useEncounter(formJson);
   const [previousEncounter, setPreviousEncounter] = useState<OpenmrsEncounter>(null);
   const [isLoadingPreviousEncounter, setIsLoadingPreviousEncounter] = useState(true);
@@ -96,27 +98,46 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
   const [isFieldInitializationComplete, setIsFieldInitializationComplete] = useState(false);
   const [invalidFields, setInvalidFields] = useState([]);
   const [initValues, setInitValues] = useState({});
+  const { isLoading: isLoadingPatientPrograms, patientPrograms } = usePatientPrograms(patient?.id, formJson);
+  const getFormField = useCallback((id: string) => fields.find((field) => field.id === id), [fields]);
 
   const layoutType = useLayoutType();
-  const encounterContext = useMemo(
-    () => ({
+  const { encounterContext, isLoadingContextDependencies } = useMemo(() => {
+    const contextObject = {
       patient: patient,
       encounter: encounter,
       previousEncounter,
       location: encounterLocation,
-      sessionMode: sessionMode || (form?.encounter ? 'edit' : 'enter'),
+      sessionMode: sessionMode || (encounter ? 'edit' : 'enter'),
       encounterDate: formSessionDate,
       encounterProvider: provider,
+      encounterRole,
       form: form,
       visit: visit,
+      initValues: initValues,
+      patientPrograms,
       setEncounterDate,
       setEncounterProvider,
       setEncounterLocation,
-      initValues: initValues,
-    }),
-    [encounter, form?.encounter, encounterLocation, patient, previousEncounter, sessionMode, initValues],
-  );
-  const { encounterRole } = useEncounterRole();
+      setEncounterRole,
+      getFormField,
+    };
+    return {
+      encounterContext: contextObject,
+      isLoadingContextDependencies: isLoadingEncounter || isLoadingPreviousEncounter || isLoadingPatientPrograms,
+    };
+  }, [
+    encounter,
+    encounterLocation,
+    patient,
+    previousEncounter,
+    sessionMode,
+    initValues,
+    patientPrograms,
+    isLoadingPatientPrograms,
+    isLoadingPreviousEncounter,
+    isLoadingEncounter,
+  ]);
 
   // given the form, flatten the fields and pull out all concept references
   const [flattenedFields, conceptReferences] = useMemo(() => {
@@ -167,6 +188,7 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
   const { initialValues: tempInitialValues, isBindingComplete } = useInitialValues(
     flattenedFields,
     encounter,
+    isLoadingContextDependencies,
     encounterContext,
     formFieldHandlers,
   );
@@ -209,7 +231,14 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
       setFields(
         flattenedFields.map((field) => {
           if (field.hide) {
-            evalHide({ value: field, type: 'field' }, flattenedFields, tempInitialValues);
+            evaluateHide(
+              { value: field, type: 'field' },
+              flattenedFields,
+              tempInitialValues,
+              sessionMode,
+              patient,
+              evaluateExpression,
+            );
           } else {
             field.isHidden = false;
           }
@@ -217,6 +246,18 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
             field.isRequired = evalConditionalRequired(field, flattenedFields, tempInitialValues);
           } else {
             field.isRequired = isTrue(field.required);
+          }
+          if (field.disabled) {
+            field.isDisabled = field.disabled?.disableWhenExpression
+              ? evaluateDisabled(
+                  { value: field, type: 'field' },
+                  flattenedFields,
+                  tempInitialValues,
+                  sessionMode,
+                  patient,
+                  evaluateExpression,
+                )
+              : isTrue(field.disabled);
           }
 
           field.questionOptions.answers
@@ -317,13 +358,27 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
 
       form?.pages?.forEach((page) => {
         if (page.hide) {
-          evalHide({ value: page, type: 'page' }, flattenedFields, tempInitialValues);
+          evaluateHide(
+            { value: page, type: 'page' },
+            flattenedFields,
+            tempInitialValues,
+            sessionMode,
+            patient,
+            evaluateExpression,
+          );
         } else {
           page.isHidden = false;
         }
         page?.sections?.forEach((section) => {
           if (section.hide) {
-            evalHide({ value: section, type: 'section' }, flattenedFields, tempInitialValues);
+            evaluateHide(
+              { value: section, type: 'section' },
+              flattenedFields,
+              tempInitialValues,
+              sessionMode,
+              patient,
+              evaluateExpression,
+            );
           } else {
             section.isHidden = false;
           }
@@ -353,30 +408,6 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
       setIsLoadingFormDependencies(false);
     }
   }, [isLoadingEncounter, isLoadingPreviousEncounter]);
-
-  const evalHide = (node, allFields: FormField[], allValues: Record<string, any>) => {
-    const { value, type } = node;
-    const isHidden = evaluateExpression(value['hide']?.hideWhenExpression, node, allFields, allValues, {
-      mode: sessionMode,
-      patient,
-    });
-    node.value.isHidden = isHidden;
-    if (type == 'field' && node.value?.questions?.length) {
-      node.value?.questions.forEach((question) => {
-        question.isParentHidden = isHidden;
-      });
-    }
-    // cascade visibility
-    if (type == 'page') {
-      value['sections'].forEach((section) => {
-        section.isParentHidden = isHidden;
-        cascadeVisibityToChildFields(isHidden, section, allFields);
-      });
-    }
-    if (type == 'section') {
-      cascadeVisibityToChildFields(isHidden, value, allFields);
-    }
-  };
 
   useEffect(() => {
     if (invalidFields?.length) {
@@ -435,8 +466,7 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
     const patientIdentifiers = EncounterFormManager.preparePatientIdentifiers(fields, encounterLocation);
     const encounter = EncounterFormManager.prepareEncounter(
       fields,
-      { ...encounterContext, encounterProvider, location: encounterLocation },
-      encounterRole,
+      { ...encounterContext, encounterProvider, encounterRole, location: encounterLocation },
       visit,
       formJson.encounterType,
       formJson.uuid,
@@ -455,6 +485,26 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
       const errorMessages = extractErrorMessagesFromResponse(error);
       return Promise.reject({
         title: t('errorSavingPatientIdentifiers', 'Error saving patient identifiers'),
+        subtitle: errorMessages.join(', '),
+        kind: 'error',
+        isLowContrast: false,
+      });
+    }
+
+    try {
+      const programs = EncounterFormManager.preparePatientPrograms(fields, patient, patientPrograms);
+      const savedPrograms = await EncounterFormManager.savePatientPrograms(programs);
+      if (savedPrograms?.length) {
+        showSnackbar({
+          title: t('patientProgramsSaved', 'Patient program(s) saved successfully'),
+          kind: 'success',
+          isLowContrast: true,
+        });
+      }
+    } catch (error) {
+      const errorMessages = extractErrorMessagesFromResponse(error);
+      return Promise.reject({
+        title: t('errorSavingPatientPrograms', 'Error saving patient program(s)'),
         subtitle: errorMessages.join(', '),
         kind: 'error',
         isLowContrast: false,
@@ -570,7 +620,26 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
         }
         // evaluate hide
         if (dependant.hide) {
-          evalHide({ value: dependant, type: 'field' }, fields, { ...values, [fieldName]: value });
+          evaluateHide(
+            { value: dependant, type: 'field' },
+            fields,
+            { ...values, [fieldName]: value },
+            sessionMode,
+            patient,
+            evaluateExpression,
+          );
+        }
+
+        // evaluate disabled
+        if (typeof dependant.disabled === 'object' && dependant.disabled.disableWhenExpression) {
+          dependant.isDisabled = evaluateDisabled(
+            { value: dependant, type: 'field' },
+            fields,
+            { ...values, [fieldName]: value },
+            sessionMode,
+            patient,
+            evaluateExpression,
+          );
         }
         // evaluate conditional required
         if (typeof dependant.required === 'object' && dependant.required?.type === 'conditionalRequired') {
@@ -659,7 +728,14 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
         for (let i = 0; i < form.pages.length; i++) {
           const section = form.pages[i].sections.find((section, _sectionIndex) => section.label == dependant);
           if (section) {
-            evalHide({ value: section, type: 'section' }, fields, { ...values, [fieldName]: value });
+            evaluateHide(
+              { value: section, type: 'section' },
+              fields,
+              { ...values, [fieldName]: value },
+              sessionMode,
+              patient,
+              evaluateExpression,
+            );
             if (isTrue(section.isHidden)) {
               section.questions.forEach((field) => {
                 field.isParentHidden = true;
@@ -673,7 +749,14 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
     if (field.pageDependants) {
       field.pageDependants?.forEach((dep) => {
         const dependant = form.pages.find((f) => f.label == dep);
-        evalHide({ value: dependant, type: 'page' }, fields, { ...values, [fieldName]: value });
+        evaluateHide(
+          { value: dependant, type: 'page' },
+          fields,
+          { ...values, [fieldName]: value },
+          sessionMode,
+          patient,
+          evaluateExpression,
+        );
         if (isTrue(dependant.isHidden)) {
           dependant.sections.forEach((section) => {
             section.questions.forEach((field) => {
@@ -693,6 +776,7 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
   if (sessionMode !== 'view') {
     handlers.set(form.name, { validate: validate, submit: handleFormSubmit });
   }
+
   return (
     <FormContext.Provider
       value={{
@@ -728,6 +812,7 @@ const EncounterForm: React.FC<EncounterFormProps> = ({
               patient={patient}
               formSessionDate={encounterDate}
               provider={provider}
+              role={encounterRole}
               location={location}
               visit={visit}
               values={values}

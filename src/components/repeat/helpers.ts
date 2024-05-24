@@ -28,6 +28,7 @@ export function cloneRepeatField(srcField: FormField, value: OpenmrsResource, id
         originalGroupMembersIds,
       );
     }
+
     if (childField.validators?.length) {
       childField.validators.forEach((validator) => {
         if (validator.type === 'js_expression') {
@@ -68,7 +69,7 @@ export function disableRepeatAddButton(limit: string | number, counter: number) 
   return counter >= repeatLimit;
 }
 
-export function hydateRepeatField(
+export function hydrateRepeatField(
   field: FormField,
   formFields: FormField[],
   encounter: OpenmrsEncounter,
