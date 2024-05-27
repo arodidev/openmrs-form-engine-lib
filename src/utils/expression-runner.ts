@@ -46,8 +46,6 @@ export function evaluateExpression(
 
   const HD = new HistoricalDataSourceService();
 
-  console.log('context.previousEncounter');
-
   HD.putObject('prevEnc', {
     value: context.previousEncounter || { obs: [] },
     getValue(concept) {
@@ -106,6 +104,15 @@ export async function evaluateAsyncExpression(
     myValue = fieldValues[node.value['id']];
   }
 
+  const HD = new HistoricalDataSourceService();
+
+  HD.putObject('prevEnc', {
+    value: context.previousEncounter || { obs: [] },
+    getValue(concept) {
+      return this.value.obs.find((obs) => obs.concept.uuid == concept);
+    },
+  });
+
   const expressionContext = {
     ...new CommonExpressionHelpers(node, patient, fields, fieldValues, allFieldsKeys),
     ...getRegisteredExpressionHelpers(),
@@ -116,6 +123,7 @@ export async function evaluateAsyncExpression(
     sex,
     age,
     temporaryObjectsMap: {},
+    HD,
     visitTypeUuid,
     _,
   };
