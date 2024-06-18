@@ -111,6 +111,7 @@ export interface FormField {
   label: string;
   type: string;
   questionOptions: FormQuestionOptions;
+  datePickerFormat?: 'both' | 'calendar' | 'timer';
   id: string;
   groupId?: string;
   questions?: Array<FormField>;
@@ -472,3 +473,5 @@ export interface PatientProgramPayload {
     endDate?: string;
   }>;
 }
+
+export type FormExpanded = boolean | undefined;
