@@ -1,28 +1,33 @@
 import {
+  type FormField,
   type DataSource,
+  type FormFieldInputProps,
   type FormFieldValidator,
+  type FormFieldValueAdapter,
   type FormSchemaTransformer,
-  type FormFieldProps,
   type PostSubmissionAction,
-  type SubmissionHandler,
 } from '../types';
 import { getGlobalStore } from '@openmrs/esm-framework';
 import { FormsStore } from '../constants';
 import { inbuiltControls } from './inbuilt-components/inbuiltControls';
-import { inbuiltFieldSubmissionHandlers } from './inbuilt-components/inbuiltFieldSubmissionHandlers';
 import { inbuiltValidators } from './inbuilt-components/inbuiltValidators';
 import { inbuiltDataSources } from './inbuilt-components/inbuiltDataSources';
 import { getControlTemplate } from './inbuilt-components/control-templates';
 import { inbuiltPostSubmissionActions } from './inbuilt-components/InbuiltPostSubmissionActions';
 import { inbuiltFormTransformers } from './inbuilt-components/inbuiltTransformers';
+import { inbuiltFieldValueAdapters } from './inbuilt-components/inbuiltFieldValueAdapters';
 
 /**
  * @internal
  */
 export interface RegistryItem<T> {
-  name: string;
+  // Do we need this?
+  name?: string;
   component: T;
   type?: string;
+  /**
+   * @deprecated
+   */
   alias?: string;
 }
 
@@ -31,19 +36,19 @@ export interface ComponentRegistration<T> {
   load: () => Promise<{ default: T }>;
 }
 
-export interface CustomControlRegistration extends ComponentRegistration<React.ComponentType<FormFieldProps>> {
+export interface CustomControlRegistration extends ComponentRegistration<React.ComponentType<FormFieldInputProps>> {
   type: string;
   alias?: string;
 }
 
-export interface FieldSubmissionHandlerRegistration extends ComponentRegistration<SubmissionHandler> {
+export interface FieldValueAdapterRegistration extends ComponentRegistration<FormFieldValueAdapter> {
   type: string;
 }
 
 export interface FormsRegistryStoreState {
   controls: CustomControlRegistration[];
   fieldValidators: ComponentRegistration<FormFieldValidator>[];
-  fieldSubmissionHandlers: FieldSubmissionHandlerRegistration[];
+  fieldValueAdapters: FieldValueAdapterRegistration[];
   postSubmissionActions: ComponentRegistration<PostSubmissionAction>[];
   dataSources: ComponentRegistration<DataSource<any>>[];
   expressionHelpers: Record<string, Function>;
@@ -52,8 +57,8 @@ export interface FormsRegistryStoreState {
 
 interface FormRegistryCache {
   validators: Record<string, FormFieldValidator>;
-  controls: Record<string, React.ComponentType<FormFieldProps>>;
-  fieldSubmissionHandlers: Record<string, SubmissionHandler>;
+  controls: Record<string, React.ComponentType<FormFieldInputProps>>;
+  fieldValueAdapters: Record<string, FormFieldValueAdapter>;
   postSubmissionActions: Record<string, PostSubmissionAction>;
   dataSources: Record<string, DataSource<any>>;
   formSchemaTransformers: Record<string, FormSchemaTransformer>;
@@ -62,7 +67,7 @@ interface FormRegistryCache {
 const registryCache: FormRegistryCache = {
   validators: {},
   controls: {},
-  fieldSubmissionHandlers: {},
+  fieldValueAdapters: {},
   postSubmissionActions: {},
   dataSources: {},
   formSchemaTransformers: {},
@@ -78,8 +83,8 @@ export function registerPostSubmissionAction(registration: ComponentRegistration
   getFormsStore().postSubmissionActions.push(registration);
 }
 
-export function registerFieldSubmissionHandler(registration: FieldSubmissionHandlerRegistration) {
-  getFormsStore().fieldSubmissionHandlers.push(registration);
+export function registerFieldValueAdapter(registration: FieldValueAdapterRegistration) {
+  getFormsStore().fieldValueAdapters.push(registration);
 }
 
 export function registerFieldValidator(registration: ComponentRegistration<FormFieldValidator>) {
@@ -118,7 +123,7 @@ export async function getRegisteredControl(renderType: string) {
   let component = inbuiltControls.find(
     (control) => control.name === renderType || control?.alias === renderType,
   )?.component;
-  // if undefined, try serching through the registered custom controls
+  // if undefined, try searching through the registered custom controls
   if (!component) {
     const importedControl = await getFormsStore()
       .controls.find((control) => control.name === renderType || control?.alias === renderType)
@@ -130,22 +135,39 @@ export async function getRegisteredControl(renderType: string) {
 }
 
 /**
- * A convinience function that returns the appropriate submission handler for a given type.
+ * Retrieves the appropriate field control for a question, considering missing concepts.
+ * If the question is of type 'obs' and has a missing concept, it falls back to a disabled text input.
+ * Otherwise, it retrieves the registered control based on the rendering specified in the question.
+ * @param question - The FormField representing the question.
+ * @returns The field control to be used for rendering the question.
  */
-export async function getRegisteredFieldSubmissionHandler(type: string): Promise<SubmissionHandler> {
-  if (registryCache.fieldSubmissionHandlers[type]) {
-    return registryCache.fieldSubmissionHandlers[type];
+export function getFieldControlWithFallback(question: FormField) {
+  // Check if the question has a missing concept
+  if (hasMissingConcept(question)) {
+    // If so, render a disabled text input
+    question.disabled = true;
+    question.isDisabled = true;
+    return getRegisteredControl('text');
   }
-  let handler = inbuiltFieldSubmissionHandlers.find((handler) => handler.type === type)?.component;
-  // if undefined, try serching through the registered custom handlers
-  if (!handler) {
-    const handlerImport = await getFormsStore()
-      .fieldSubmissionHandlers.find((handler) => handler.type === type)
+
+  // Retrieve the registered control based on the specified rendering
+  return getRegisteredControl(question.questionOptions.rendering);
+}
+
+export async function getRegisteredFieldValueAdapter(type: string): Promise<FormFieldValueAdapter> {
+  if (registryCache.fieldValueAdapters[type]) {
+    return registryCache.fieldValueAdapters[type];
+  }
+  let adapter = inbuiltFieldValueAdapters.find((adapter) => adapter.type === type)?.component;
+  // if undefined, try searching through the registered custom handlers
+  if (!adapter) {
+    const adapterImport = await getFormsStore()
+      .fieldValueAdapters.find((adapter) => adapter.type === type)
       ?.load?.();
-    handler = handlerImport?.default;
+    adapter = adapterImport?.default;
   }
-  registryCache.fieldSubmissionHandlers[type] = handler;
-  return handler;
+  registryCache.fieldValueAdapters[type] = adapter;
+  return adapter;
 }
 
 export async function getRegisteredFormSchemaTransformers(): Promise<FormSchemaTransformer[]> {
@@ -254,8 +276,14 @@ function getFormsStore(): FormsRegistryStoreState {
     postSubmissionActions: [],
     expressionHelpers: {},
     fieldValidators: [],
-    fieldSubmissionHandlers: [],
+    fieldValueAdapters: [],
     dataSources: [],
     formSchemaTransformers: [],
   }).getState();
+}
+
+function hasMissingConcept(question: FormField) {
+  return (
+    question.type == 'obs' && !question.questionOptions.concept && question.questionOptions.rendering !== 'fixed-value'
+  );
 }

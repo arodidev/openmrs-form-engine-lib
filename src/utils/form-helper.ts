@@ -1,28 +1,10 @@
-import dayjs from 'dayjs';
 import { type LayoutType } from '@openmrs/esm-framework';
-import { ConceptTrue } from '../constants';
-import { type EncounterContext } from '../form-context';
-import { type FormField, type FormPage, type FormSection, type SessionMode, type SubmissionHandler } from '../types';
+import { type OpenmrsObs, type FormField, type FormPage, type FormSection, type SessionMode } from '../types';
 import { isEmpty } from '../validators/form-validator';
-import { DefaultValueValidator } from '../validators/default-value-validator';
+import { parseToLocalDateTime } from './common-utils';
+import dayjs from 'dayjs';
 
-export function inferInitialValueFromDefaultFieldValue(
-  field: FormField,
-  context: EncounterContext,
-  handler: SubmissionHandler,
-) {
-  if (field.questionOptions.rendering == 'toggle') {
-    return field.questionOptions.defaultValue == ConceptTrue;
-  }
-  // validate default value
-  if (!DefaultValueValidator.validate(field, field.questionOptions.defaultValue).length) {
-    // construct observation
-    handler.handleFieldSubmission(field, field.questionOptions.defaultValue, context);
-    return field.questionOptions.defaultValue;
-  }
-}
-
-export function isInlineView(
+export function shouldUseInlineLayout(
   renderingType: 'single-line' | 'multiline' | 'automatic',
   layoutType: LayoutType,
   workspaceLayout: 'minimized' | 'maximized',
@@ -43,7 +25,7 @@ export function evaluateConditionalAnswered(field: FormField, allFields: FormFie
   ).referenceQuestionId;
   const referencedField = allFields.find((field) => field.id == referencedFieldId);
   if (referencedField) {
-    (referencedField.fieldDependants || (referencedField.fieldDependants = new Set())).add(field.id);
+    (referencedField.fieldDependents || (referencedField.fieldDependents = new Set())).add(field.id);
   }
 }
 
@@ -76,17 +58,6 @@ export function findPagesWithErrors(pages: Set<FormPage>, errorFields: FormField
   return pagesWithErrors;
 }
 
-export function parseToLocalDateTime(dateString: string): Date {
-  const dateObj = dayjs(dateString).toDate();
-  try {
-    const localTimeTokens = dateString.split('T')[1].split(':');
-    dateObj.setHours(parseInt(localTimeTokens[0]), parseInt(localTimeTokens[1]), 0);
-  } catch (e) {
-    console.error(e);
-  }
-  return dateObj;
-}
-
 export function evalConditionalRequired(field: FormField, allFields: FormField[], formValues: Record<string, any>) {
   if (typeof field.required !== 'object') {
     return false;
@@ -94,7 +65,7 @@ export function evalConditionalRequired(field: FormField, allFields: FormField[]
   const { referenceQuestionAnswers, referenceQuestionId } = field.required;
   const referencedField = allFields.find((field) => field.id == referenceQuestionId);
   if (referencedField) {
-    (referencedField.fieldDependants || (referencedField.fieldDependants = new Set())).add(field.id);
+    (referencedField.fieldDependents || (referencedField.fieldDependents = new Set())).add(field.id);
     return referenceQuestionAnswers?.includes(formValues[referenceQuestionId]);
   }
   return false;
@@ -187,3 +158,38 @@ export function findConceptByReference(reference: string, concepts) {
     });
   }
 }
+
+export function scrollIntoView(viewId: string, shouldFocus: boolean = false) {
+  const currentElement = document.getElementById(viewId);
+  currentElement?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'center',
+    inline: 'center',
+  });
+
+  if (shouldFocus) {
+    currentElement?.focus();
+  }
+}
+
+export const extractObsValueAndDisplay = (field: FormField, obs: OpenmrsObs) => {
+  const rendering = field.questionOptions.rendering;
+
+  if (typeof obs.value === 'string' || typeof obs.value === 'number') {
+    if (rendering === 'date' || rendering === 'datetime') {
+      const dateObj = parseToLocalDateTime(`${obs.value}`);
+      return { value: dateObj, display: dayjs(dateObj).format('YYYY-MM-DD HH:mm') };
+    }
+    return { value: obs.value, display: obs.value };
+  } else if (['toggle', 'checkbox'].includes(rendering)) {
+    return {
+      value: obs.value?.uuid,
+      display: obs.value?.name?.name,
+    };
+  } else {
+    return {
+      value: obs.value?.uuid,
+      display: field.questionOptions.answers?.find((option) => option.concept === obs.value?.uuid)?.label,
+    };
+  }
+};

@@ -9,29 +9,21 @@ import last from 'lodash/last';
 import { type FormField } from '../types';
 import { type FormNode } from './expression-runner';
 import { isEmpty as isValueEmpty } from '../validators/form-validator';
-import * as apiFunctions from '../api/api';
+import * as apiFunctions from '../api';
 import { getZRefByGenderAndAge } from './zscore-service';
-import { ConceptFalse, ConceptTrue } from '../constants';
+import { formatDate, parseDate } from '@openmrs/esm-framework';
 
 export class CommonExpressionHelpers {
   node: FormNode = null;
   patient: any = null;
   allFields: FormField[] = [];
   allFieldValues: Record<string, any> = {};
-  allFieldsKeys: string[] = [];
   api = apiFunctions;
   isEmpty = isValueEmpty;
 
-  constructor(
-    node: FormNode,
-    patient: any,
-    allFields: FormField[],
-    allFieldValues: Record<string, any>,
-    allFieldsKeys: string[],
-  ) {
+  constructor(node: FormNode, patient: any, allFields: FormField[], allFieldValues: Record<string, any>) {
     this.allFields = allFields;
     this.allFieldValues = allFieldValues;
-    this.allFieldsKeys = allFieldsKeys;
     this.node = node;
     this.patient = patient;
   }
@@ -73,8 +65,7 @@ export class CommonExpressionHelpers {
       default:
         break;
     }
-
-    return selectedDate.getTime() > calculatedDate.getTime();
+    return selectedDate.getTime() >= calculatedDate.getTime();
   };
 
   addWeeksToDate = (date: Date, weeks: number) => {
@@ -88,10 +79,12 @@ export class CommonExpressionHelpers {
   };
 
   useFieldValue = (questionId: string) => {
-    if (this.allFieldsKeys.includes(questionId)) {
-      return this.allFieldValues[questionId];
+    const targetField = this.allFields.find((field) => field.id === questionId);
+    if (targetField) {
+      // track field dependency
+      registerDependency(this.node, targetField);
     }
-    return null;
+    return this.allFieldValues[questionId] ?? null;
   };
 
   doesNotMatchExpression = (regexString: string, val: string | null | undefined): boolean => {
@@ -125,6 +118,12 @@ export class CommonExpressionHelpers {
   };
 
   calcMonthsOnART = (artStartDate: Date) => {
+    if (artStartDate == null) return null;
+
+    if (!(artStartDate instanceof Date)) {
+      throw new Error('DateFormatException: value passed is not a valid date');
+    }
+
     let today = new Date();
     let resultMonthsOnART: number;
     let artInDays = Math.round((today.getTime() - artStartDate.getTime?.()) / 86400000);
@@ -238,18 +237,21 @@ export class CommonExpressionHelpers {
     return false;
   };
 
-  formatDate = (value: ConstructorParameters<typeof Date>[0], format?: string | null, offset?: string | null) => {
-    format = format ?? 'yyyy-MM-dd';
-    offset = offset ?? '+0300';
+  parseDate = (dateString: string) => {
+    return parseDate(dateString);
+  };
 
+  formatDate = (value: ConstructorParameters<typeof Date>[0], format?: string) => {
     if (!(value instanceof Date)) {
       value = new Date(value);
-      if (value === null || value === undefined) {
-        throw new Error('DateFormatException: value passed ' + 'is not a valid date');
+      if (value === null || value === undefined || isNaN(value.getTime())) {
+        throw new Error('DateFormatException: value passed is not a valid date');
       }
     }
-
-    return value;
+    if (format) {
+      return dayjs(value).format(format);
+    }
+    return formatDate(value);
   };
 
   extractRepeatingGroupValues = (key: string | number | symbol, array: Record<string | number | symbol, unknown>[]) => {
@@ -464,40 +466,42 @@ export class CommonExpressionHelpers {
   };
 }
 
+/**
+ * Simple hash function to generate a unique identifier for a string.
+ * @param str - The string to hash.
+ * @returns A unique identifier for the string.
+ */
+export function simpleHash(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0;
+  }
+  return hash;
+}
+
 export function registerDependency(node: FormNode, determinant: FormField) {
   if (!node || !determinant) {
     return;
   }
   switch (node.type) {
     case 'page':
-      if (!determinant.pageDependants) {
-        determinant.pageDependants = new Set();
+      if (!determinant.pageDependents) {
+        determinant.pageDependents = new Set();
       }
-      determinant.pageDependants.add(node.value.label);
+      determinant.pageDependents.add(node.value.label);
       break;
     case 'section':
-      if (!determinant.sectionDependants) {
-        determinant.sectionDependants = new Set();
+      if (!determinant.sectionDependents) {
+        determinant.sectionDependents = new Set();
       }
-      determinant.sectionDependants.add(node.value.label);
+      determinant.sectionDependents.add(node.value.label);
       break;
     default:
-      if (!determinant.fieldDependants) {
-        determinant.fieldDependants = new Set();
+      if (!determinant.fieldDependents) {
+        determinant.fieldDependents = new Set();
       }
-      determinant.fieldDependants.add(node.value['id']);
+      determinant.fieldDependents.add(node.value['id']);
   }
 }
-
-export const booleanConceptToBoolean = (booleanConceptRepresentation): boolean => {
-  const { value } = booleanConceptRepresentation;
-  if (!booleanConceptRepresentation) {
-    throw new Error('booleanConceptRepresentation cannot be a null value');
-  }
-  if (value == ConceptTrue) {
-    return true;
-  }
-  if (value == ConceptFalse) {
-    return false;
-  }
-};

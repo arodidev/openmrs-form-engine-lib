@@ -1,6 +1,8 @@
-import { type FormField, type FormSchemaTransformer, type FormSchema } from '../types';
+import { type FormField, type FormSchema, type FormSchemaTransformer, type RenderType } from '../types';
 import { isTrue } from '../utils/boolean-utils';
 import { hasRendering } from '../utils/common-utils';
+
+export type RenderTypeExtended = 'multiCheckbox' | 'numeric' | RenderType;
 
 export const DefaultFormSchemaTransformer: FormSchemaTransformer = {
   transform: (form: FormSchema) => {
@@ -37,8 +39,13 @@ function handleQuestion(question: FormField, form: FormSchema) {
     setFieldValidators(question);
     transformByType(question);
     transformByRendering(question);
-    if (question?.questions?.length) {
-      question.questions.forEach((question) => handleQuestion(question, form));
+
+    if (question.questions?.length) {
+      if (question.type === 'obsGroup' && question.questions.length) {
+        question.questions.forEach((nestedQuestion) => handleQuestion(nestedQuestion, form));
+      } else {
+        question.questions.forEach((nestedQuestion) => handleQuestion(nestedQuestion, form));
+      }
     }
   } catch (error) {
     console.error(error);
@@ -84,9 +91,11 @@ function sanitizeQuestion(question: FormField) {
   parseBooleanTokenIfPresent(question.questionOptions, 'isTransient');
   parseBooleanTokenIfPresent(question.questionOptions, 'enablePreviousValue');
   parseBooleanTokenIfPresent(question.questionOptions, 'allowMultiple');
-  question.meta = {
-    submission: null,
-  };
+  if (!question.meta) {
+    question.meta = {
+      submission: null,
+    };
+  }
 }
 
 function parseBooleanTokenIfPresent(node: any, token: any) {
@@ -133,9 +142,10 @@ function transformByType(question: FormField) {
 }
 
 function transformByRendering(question: FormField) {
-  switch (question.questionOptions.rendering as any) {
+  switch (question.questionOptions.rendering as RenderTypeExtended) {
+    case 'checkbox-searchable':
     case 'multiCheckbox':
-      question.questionOptions.rendering = 'checkbox';
+      handleCheckbox(question);
       break;
     case 'numeric':
       question.questionOptions.rendering = 'number';
@@ -153,8 +163,32 @@ function transformByRendering(question: FormField) {
     case 'datetime':
       question.datePickerFormat = question.datePickerFormat ?? 'both';
       break;
+    case 'workspace-launcher':
+      question.type = 'control';
+      break;
+    case 'markdown':
+      question.type = 'control';
+      break;
+    case 'drug':
+    case 'problem':
+      question.questionOptions.isSearchable = true;
+      break;
   }
   return question;
+}
+
+function handleCheckbox(question: FormField) {
+  if ((question.questionOptions.rendering as RenderTypeExtended) === 'multiCheckbox') {
+    question.questionOptions.rendering = 'checkbox-searchable';
+    if (isTrue(question.inlineMultiCheckbox)) {
+      question.questionOptions.rendering = 'checkbox';
+    }
+  }
+
+  if (hasRendering(question, 'checkbox-searchable')) {
+    question.questionOptions.rendering = 'checkbox';
+    question.questionOptions.isCheckboxSearchable = true;
+  }
 }
 
 function handleLabOrders(question: FormField) {
@@ -168,6 +202,7 @@ function handleLabOrders(question: FormField) {
 }
 
 function handleSelectConceptAnswers(question: FormField) {
+  question.questionOptions.isSearchable = true;
   if (!question.questionOptions.datasource?.config) {
     question.questionOptions.datasource = {
       name: 'select_concept_answers_datasource',

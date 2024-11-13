@@ -1,81 +1,54 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useMemo } from 'react';
 import classNames from 'classnames';
-import { useField } from 'formik';
-import { FormContext } from '../../form-context';
-import { type FormFieldProps } from '../../types';
-import { getFieldControlWithFallback, isUnspecifiedSupported } from '../section/helpers';
-import Tooltip from '../inputs/tooltip/tooltip.component';
-import UnspecifiedField from '../inputs/unspecified/unspecified.component';
-import styles from '../section/form-section.scss';
+import { type FormFieldInputProps } from '../../types';
+import styles from './obs-group.scss';
+import { FormFieldRenderer, isGroupField } from '../renderer/field/form-field-renderer.component';
+import { useFormProviderContext } from '../../provider/form-provider';
+import { FormGroup } from '@carbon/react';
+import { useTranslation } from 'react-i18next';
 
-export const ObsGroup: React.FC<FormFieldProps> = ({ question, onChange }) => {
-  const [groupMembersControlMap, setGroupMembersControlMap] = useState([]);
-  const { formFieldHandlers } = useContext(FormContext);
+export const ObsGroup: React.FC<FormFieldInputProps> = ({ field, ...restProps }) => {
+  const { t } = useTranslation();
+  const { formFieldAdapters } = useFormProviderContext();
+  const showLabel = useMemo(() => field.questions?.length > 1, [field]);
 
-  useEffect(() => {
-    if (question.questions) {
-      Promise.all(
-        question.questions.map((field) => {
-          return getFieldControlWithFallback(field)?.then((result) => ({ field, control: result }));
-        }),
-      ).then((results) => {
-        setGroupMembersControlMap(results);
-      });
-    }
-  }, [question.questions]);
+  const content = useMemo(
+    () =>
+      field.questions
+        ?.filter((child) => !child.isHidden)
+        .map((child, index) => {
+          const keyId = `${child.id}_${index}`;
 
-  const groupContent = groupMembersControlMap
-    .filter((groupMemberMapItem) => !!groupMemberMapItem && !groupMemberMapItem.field.isHidden)
-    .map((groupMemberMapItem, index) => {
-      const keyId = groupMemberMapItem.field.id + '_' + index;
-      const { control: FieldComponent, field } = groupMemberMapItem;
-      const rendering = field.questionOptions.rendering;
-      if (FieldComponent) {
-        return (
-          <div className={classNames(styles.flexColumn)} key={keyId}>
-            <div className={styles.parentResizer}>
-              <div
-                className={classNames({
-                  [styles.questionInfoDefault]: field.questionInfo && rendering === 'radio',
-                  [styles.questionInfoCentralized]: field.questionInfo && rendering !== 'radio',
-                })}>
-                <div
-                  className={classNames({
-                    [styles.flexBasisOn]: [
-                      'ui-select-extended',
-                      'content-switcher',
-                      'select',
-                      'textarea',
-                      'text',
-                      'checkbox',
-                    ].includes(rendering),
-                  })}>
-                  <FieldComponent
-                    key={field.id}
-                    question={field}
-                    onChange={onChange}
-                    handler={formFieldHandlers[field.type]}
-                    useField={useField}
-                  />
+          if (child.type === 'obsGroup' && isGroupField(child.questionOptions.rendering)) {
+            return (
+              <div key={keyId} className={styles.nestedGroupContainer}>
+                <ObsGroup field={child} {...restProps} />
+              </div>
+            );
+          } else if (formFieldAdapters[child.type]) {
+            return (
+              <div className={classNames(styles.flexColumn)} key={keyId}>
+                <div className={styles.groupContainer}>
+                  <FormFieldRenderer fieldId={child.id} valueAdapter={formFieldAdapters[child.type]} />
                 </div>
-                {field.questionInfo && (
-                  <div className={styles.questionInfoControl}>
-                    <Tooltip field={field} />
-                  </div>
-                )}
               </div>
-              <div>
-                {isUnspecifiedSupported(field) && (
-                  <UnspecifiedField question={field} onChange={onChange} handler={formFieldHandlers[field.type]} />
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      }
-    });
+            );
+          }
+        }),
+    [field],
+  );
 
-  return <div className={styles.flexRow}>{groupContent}</div>;
+  return (
+    <div className={styles.groupContainer}>
+      {showLabel ? (
+        <FormGroup legendText={t(field.label)} className={styles.boldLegend}>
+          {content}
+        </FormGroup>
+      ) : (
+        content
+      )}
+    </div>
+  );
 };
 
 export default ObsGroup;

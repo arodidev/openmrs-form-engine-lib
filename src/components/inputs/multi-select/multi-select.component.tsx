@@ -1,63 +1,52 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { FilterableMultiSelect, Layer, Tag, CheckboxGroup, Checkbox } from '@carbon/react';
-import { useField } from 'formik';
 import { useTranslation } from 'react-i18next';
-import { FormContext } from '../../../form-context';
-import { type FormFieldProps } from '../../../types';
+import { type FormFieldInputProps } from '../../../types';
 import { ValueEmpty } from '../../value/value.component';
-import { isEmpty } from '../../../validators/form-validator';
-import { isInlineView } from '../../../utils/form-helper';
+import { shouldUseInlineLayout } from '../../../utils/form-helper';
 import { isTrue } from '../../../utils/boolean-utils';
 import FieldValueView from '../../value/view/field-value-view.component';
-import RequiredFieldLabel from '../../required-field-label/required-field-label.component';
 import styles from './multi-select.scss';
-import { useFieldValidationResults } from '../../../hooks/useFieldValidationResults';
+import { useFormProviderContext } from '../../../provider/form-provider';
+import FieldLabel from '../../field-label/field-label.component';
 
-const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, handler, previousValue }) => {
+const MultiSelect: React.FC<FormFieldInputProps> = ({ field, value, errors, warnings, setFieldValue }) => {
   const { t } = useTranslation();
-  const [field] = useField(question.id);
-  const { setFieldValue, encounterContext, layoutType, workspaceLayout, isFieldInitializationComplete } =
-    React.useContext(FormContext);
   const [counter, setCounter] = useState(0);
-  const { errors, warnings, setErrors, setWarnings } = useFieldValidationResults(question);
   const [initiallyCheckedQuestionItems, setInitiallyCheckedQuestionItems] = useState([]);
   const isFirstRender = useRef(true);
+  const { layoutType, sessionMode, workspaceLayout, formFieldAdapters } = useFormProviderContext();
 
-  const selectOptions = question.questionOptions.answers
+  const selectOptions = field.questionOptions.answers
     .filter((answer) => !answer.isHidden)
     .map((answer, index) => ({
-      id: `${question.id}-${answer.concept}`,
+      id: `${field.id}-${answer.concept}`,
       concept: answer.concept,
       label: answer.label,
       key: index,
       disabled: answer.disable?.isDisabled,
+      readonly: isTrue(field.readonly),
     }));
 
   const initiallySelectedQuestionItems = useMemo(() => {
-    if (isFieldInitializationComplete && field.value?.length && counter < 1) {
+    if (value?.length && counter < 1) {
       setCounter(counter + 1);
-      return selectOptions.filter((item) => field.value?.includes(item.concept));
+      return selectOptions.filter((item) => value?.includes(item.concept));
     }
     return [];
-  }, [isFieldInitializationComplete, field.value]);
+  }, [value]);
 
   const handleSelectItemsChange = ({ selectedItems }) => {
     const value = selectedItems.map((selectedItem) => {
       return selectedItem.concept;
     });
-    setFieldValue(question.id, value);
-    onChange(question.id, value, setErrors, setWarnings);
-    handler?.handleFieldSubmission(question, value, encounterContext);
+    setFieldValue(value);
   };
 
-  useEffect(() => {
-    if (!isEmpty(previousValue)) {
-      const previousValues = Array.isArray(previousValue) ? previousValue.map((item) => item.value) : [previousValue];
-      setFieldValue(question.id, previousValues);
-      onChange(question.id, previousValues, setErrors, setWarnings);
-      handler?.handleFieldSubmission(question, previousValues, encounterContext);
-    }
-  }, [previousValue]);
+  const isSearchable = useMemo(
+    () => isTrue(field.questionOptions.isCheckboxSearchable),
+    [field.questionOptions.isCheckboxSearchable],
+  );
 
   useEffect(() => {
     if (isFirstRender.current && counter === 1) {
@@ -78,45 +67,61 @@ const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, handler, pr
         : [...initiallyCheckedQuestionItems, value];
     }
     setInitiallyCheckedQuestionItems(updatedItems);
-    setFieldValue(question.id, updatedItems);
-    onChange(question.id, updatedItems, setErrors, setWarnings);
-    handler?.handleFieldSubmission(question, updatedItems, encounterContext);
+    setFieldValue(updatedItems);
   };
 
   const isInline = useMemo(() => {
-    if (['view', 'embedded-view'].includes(encounterContext.sessionMode) || isTrue(question.readonly)) {
-      return isInlineView(question.inlineRendering, layoutType, workspaceLayout, encounterContext.sessionMode);
+    if (['view', 'embedded-view'].includes(sessionMode) || isTrue(field.readonly)) {
+      return shouldUseInlineLayout(field.inlineRendering, layoutType, workspaceLayout, sessionMode);
     }
     return false;
-  }, [encounterContext.sessionMode, question.readonly, question.inlineRendering, layoutType, workspaceLayout]);
+  }, [sessionMode, field.readonly, field.inlineRendering, layoutType, workspaceLayout]);
 
   const label = useMemo(() => {
-    return question.isRequired ? <RequiredFieldLabel label={t(question.label)} /> : <span>{t(question.label)}</span>;
-  }, [question.isRequired, question.label, t]);
+    return field.isRequired ? <FieldLabel field={field} /> : <span>{t(field.label)}</span>;
+  }, [field.isRequired, field.label, t]);
 
-  return encounterContext.sessionMode == 'view' || encounterContext.sessionMode == 'embedded-view' ? (
+  return sessionMode == 'view' || sessionMode == 'embedded-view' ? (
     <div className={styles.formField}>
       <FieldValueView
-        label={t(question.label)}
-        value={field.value ? handler?.getDisplayValue(question, field.value) : field.value}
-        conceptName={question.meta?.concept?.display}
+        label={t(field.label)}
+        value={value ? formFieldAdapters[field.type]?.getDisplayValue(field, value) : value}
+        conceptName={field.meta?.concept?.display}
         isInline={isInline}
       />
     </div>
   ) : (
-    !question.isHidden && (
+    !field.isHidden && (
       <>
         <div className={styles.boldedLabel}>
           <Layer>
-            {question.inlineMultiCheckbox ? (
-              <CheckboxGroup legendText={label} name={question.id}>
-                {question.questionOptions.answers?.map((value, index) => {
+            {isSearchable ? (
+              <FilterableMultiSelect
+                placeholder={t('search', 'Search') + '...'}
+                onChange={handleSelectItemsChange}
+                id={t(field.label)}
+                items={selectOptions}
+                initialSelectedItems={initiallySelectedQuestionItems}
+                label={''}
+                titleText={label}
+                key={field.id}
+                itemToString={(item) => (item ? item.label : ' ')}
+                disabled={field.isDisabled}
+                invalid={errors.length > 0}
+                invalidText={errors[0]?.message}
+                warn={warnings.length > 0}
+                warnText={warnings[0]?.message}
+                readOnly={isTrue(field.readonly)}
+              />
+            ) : (
+              <CheckboxGroup legendText={label} name={field.id} readOnly={isTrue(field.readonly)}>
+                {field.questionOptions.answers?.map((value, index) => {
                   return (
                     <Checkbox
-                      key={value.concept}
+                      key={`${field.id}-${value.concept}`}
                       className={styles.checkbox}
                       labelText={value.label}
-                      id={value.concept}
+                      id={`${field.id}-${value.concept}`}
                       onChange={() => {
                         handleSelectCheckbox(value);
                       }}
@@ -124,44 +129,30 @@ const MultiSelect: React.FC<FormFieldProps> = ({ question, onChange, handler, pr
                       defaultChecked={initiallyCheckedQuestionItems.some((item) => item === value.concept)}
                       checked={initiallyCheckedQuestionItems.some((item) => item === value.concept)}
                       onBlur={onblur}
+                      disabled={value.disable?.isDisabled}
+                      readOnly={isTrue(field.readonly)}
                     />
                   );
                 })}
               </CheckboxGroup>
-            ) : (
-              <FilterableMultiSelect
-                placeholder={t('search', 'Search') + '...'}
-                onChange={handleSelectItemsChange}
-                id={t(question.label)}
-                items={selectOptions}
-                initialSelectedItems={initiallySelectedQuestionItems}
-                label={''}
-                titleText={label}
-                key={counter}
-                itemToString={(item) => (item ? item.label : ' ')}
-                disabled={question.isDisabled}
-                invalid={errors.length > 0}
-                invalidText={errors[0]?.message}
-                warn={warnings.length > 0}
-                warnText={warnings[0]?.message}
-                readOnly={question.readonly}
-              />
             )}
           </Layer>
         </div>
-        <div className={styles.selectionDisplay}>
-          {field.value?.length && question.questionOptions.answers?.length > 5 ? (
-            <div className={styles.tagContainer}>
-              {handler?.getDisplayValue(question, field.value)?.map((displayValue, index) => (
-                <Tag key={index} type="cool-gray">
-                  {displayValue}
-                </Tag>
-              ))}
-            </div>
-          ) : (
-            <ValueEmpty />
-          )}
-        </div>
+        {isSearchable && (
+          <div className={styles.selectionDisplay}>
+            {value?.length ? (
+              <div className={styles.tagContainer}>
+                {formFieldAdapters[field.type]?.getDisplayValue(field, value)?.map((displayValue, index) => (
+                  <Tag key={index} type="cool-gray">
+                    {displayValue}
+                  </Tag>
+                ))}
+              </div>
+            ) : (
+              <ValueEmpty />
+            )}
+          </div>
+        )}
       </>
     )
   );
